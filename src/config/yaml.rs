@@ -1,17 +1,12 @@
 use super::env::EnvConfig;
+use crate::common::fs;
 use crate::filesystem::default_config_pathbuf;
 use crate::finder::FinderChoice;
-use crate::fs;
-use crate::terminal::style::Color as TerminalColor;
-use anyhow::Result;
-use serde::{de, Deserialize};
-use std::convert::TryFrom;
-use std::io::BufReader;
-use std::path::Path;
-use std::path::PathBuf;
-use std::str::FromStr;
+use crate::prelude::*;
+use crossterm::style::Color as TerminalColor;
+use serde::de;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Color(#[serde(deserialize_with = "color_deserialize")] TerminalColor);
 
 impl Color {
@@ -26,10 +21,10 @@ where
 {
     let s: String = Deserialize::deserialize(deserializer)?;
     TerminalColor::try_from(s.as_str())
-        .map_err(|_| de::Error::custom(format!("Failed to deserialize color: {}", s)))
+        .map_err(|_| de::Error::custom(format!("Failed to deserialize color: {s}")))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(default)]
 pub struct ColorWidth {
     pub color: Color,
@@ -37,7 +32,7 @@ pub struct ColorWidth {
     pub min_width: u16,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(default)]
 pub struct Style {
     pub tag: ColorWidth,
@@ -45,7 +40,7 @@ pub struct Style {
     pub snippet: ColorWidth,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(default)]
 pub struct Finder {
     #[serde(deserialize_with = "finder_deserialize")]
@@ -60,30 +55,37 @@ where
 {
     let s: String = Deserialize::deserialize(deserializer)?;
     FinderChoice::from_str(s.to_lowercase().as_str())
-        .map_err(|_| de::Error::custom(format!("Failed to deserialize finder: {}", s)))
+        .map_err(|_| de::Error::custom(format!("Failed to deserialize finder: {s}")))
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, Debug)]
 #[serde(default)]
 pub struct Cheats {
     pub path: Option<String>,
     pub paths: Vec<String>,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, Debug)]
 #[serde(default)]
 pub struct Search {
     pub tags: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(default)]
 pub struct Shell {
     pub command: String,
     pub finder_command: Option<String>,
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Debug)]
+#[serde(default)]
+#[derive(Default)]
+pub struct Client {
+    pub tealdeer: bool,
+}
+
+#[derive(Deserialize, Default, Debug)]
 #[serde(default)]
 pub struct YamlConfig {
     pub style: Style,
@@ -91,6 +93,7 @@ pub struct YamlConfig {
     pub cheats: Cheats,
     pub search: Search,
     pub shell: Shell,
+    pub client: Client,
 }
 
 impl YamlConfig {

@@ -1,21 +1,19 @@
-use crate::config::CONFIG;
+use crate::common::shell;
 use crate::finder::structures::SuggestionType;
-use crate::shell;
-use anyhow::Context;
-use anyhow::Result;
+use crate::prelude::*;
 use shell::EOF;
 use std::process::Stdio;
 
 fn apply_map(text: String, map_fn: Option<String>) -> Result<String> {
     if let Some(m) = map_fn {
         let cmd = if CONFIG.shell().contains("fish") {
-            format!(r#"printf "%s" "{text}" | {m}"#, m = m, text = text)
+            format!(r#"printf "%s" "{text}" | {m}"#)
         } else {
             format!(
                 r#"_navi_input() {{
-cat <<'{eof}'
+cat <<'{EOF}'
 {text}
-{eof}
+{EOF}
 }}
 
 _navi_map_fn() {{
@@ -26,10 +24,7 @@ _navi_nonewline() {{
   printf "%s" "$(cat)"
 }}
 
-_navi_input | _navi_map_fn | _navi_nonewline"#,
-                m = m,
-                text = text,
-                eof = EOF
+_navi_input | _navi_map_fn | _navi_nonewline"#
             )
         };
 
@@ -91,7 +86,7 @@ pub(super) fn parse_output_single(mut text: String, suggestion_type: SuggestionT
         SuggestionType::SingleRecommendation => {
             let lines: Vec<&str> = text.lines().collect();
 
-            match (lines.get(0), lines.get(1), lines.get(2)) {
+            match (lines.first(), lines.get(1), lines.get(2)) {
                 (Some(one), Some(termination), Some(two))
                     if *termination == "enter" || termination.is_empty() =>
                 {
@@ -159,8 +154,8 @@ mod tests {
 
     #[test]
     fn test_parse_snippet_request() {
-        let text = "enter\nssh                     ⠀login to a server and forward to ssh key (d…  ⠀ssh -A <user>@<server>  ⠀ssh  ⠀login to a server and forward to ssh key (dangerous but usefull for bastion hosts)  ⠀ssh -A <user>@<server>  ⠀\n".to_string();
+        let text = "enter\nssh                     ⠀login to a server and forward to ssh key (d…  ⠀ssh -A <user>@<server>  ⠀ssh  ⠀login to a server and forward to ssh key (dangerous but useful for bastion hosts)  ⠀ssh -A <user>@<server>  ⠀\n".to_string();
         let output = parse_output_single(text, SuggestionType::SnippetSelection).unwrap();
-        assert_eq!(output,     "enter\nssh                     ⠀login to a server and forward to ssh key (d…  ⠀ssh -A <user>@<server>  ⠀ssh  ⠀login to a server and forward to ssh key (dangerous but usefull for bastion hosts)  ⠀ssh -A <user>@<server>  ⠀");
+        assert_eq!(output,     "enter\nssh                     ⠀login to a server and forward to ssh key (d…  ⠀ssh -A <user>@<server>  ⠀ssh  ⠀login to a server and forward to ssh key (dangerous but useful for bastion hosts)  ⠀ssh -A <user>@<server>  ⠀");
     }
 }

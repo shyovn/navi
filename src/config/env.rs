@@ -1,9 +1,8 @@
 use crate::env_var;
-
 use crate::finder::FinderChoice;
+use crate::prelude::*;
 
-use std::str::FromStr;
-
+#[derive(Debug)]
 pub struct EnvConfig {
     pub config_yaml: Option<String>,
     pub config_path: Option<String>,

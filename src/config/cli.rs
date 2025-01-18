@@ -1,61 +1,10 @@
+use crate::commands;
 use crate::finder::FinderChoice;
-use crate::handler::func::Func;
-use crate::handler::info::Info;
-use crate::shell::Shell;
 
-use clap::{crate_version, AppSettings, Parser, Subcommand};
-
-use std::str::FromStr;
-
-const FINDER_POSSIBLE_VALUES: &[&str] = &["fzf", "skim"];
-const WIDGET_POSSIBLE_VALUES: &[&str] = &["bash", "zsh", "fish", "elvish"];
-const FUNC_POSSIBLE_VALUES: &[&str] = &["url::open", "welcome", "widget::last_command", "map::expand"];
-const INFO_POSSIBLE_VALUES: &[&str] = &["cheats-example", "cheats-path", "config-path", "config-example"];
-
-impl FromStr for Shell {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "bash" => Ok(Shell::Bash),
-            "zsh" => Ok(Shell::Zsh),
-            "fish" => Ok(Shell::Fish),
-            "elvish" => Ok(Shell::Elvish),
-            _ => Err("no match"),
-        }
-    }
-}
-
-impl FromStr for Func {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "url::open" => Ok(Func::UrlOpen),
-            "welcome" => Ok(Func::Welcome),
-            "widget::last_command" => Ok(Func::WidgetLastCommand),
-            "map::expand" => Ok(Func::MapExpand),
-            _ => Err("no match"),
-        }
-    }
-}
-
-impl FromStr for Info {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "cheats-example" => Ok(Info::CheatsExample),
-            "cheats-path" => Ok(Info::CheatsPath),
-            "config-example" => Ok(Info::ConfigExample),
-            "config-path" => Ok(Info::ConfigPath),
-            _ => Err("no match"),
-        }
-    }
-}
+use clap::{crate_version, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[clap(after_help = "\x1b[0;33mMORE INFO:\x1b[0;0m
+#[command(after_help = "\x1b[0;33mMORE INFO:\x1b[0;0m
     Please refer to \x1b[0;32mhttps://github.com/denisidoro/navi\x1b[0;0m
 
 \x1b[0;33mENVIRONMENT VARIABLES:\x1b[0m
@@ -88,51 +37,54 @@ impl FromStr for Info {
     navi --fzf-overrides '--nth 1,2'             # only consider the first two columns for search
     navi --fzf-overrides '--no-exact'            # use looser search algorithm
     navi --tag-rules='git,!checkout'             # show non-checkout git snippets only")]
-#[clap(setting = AppSettings::AllowHyphenValues)]
 #[clap(version = crate_version!())]
 pub(super) struct ClapConfig {
     /// Colon-separated list of paths containing .cheat files
-    #[clap(short, long)]
+    #[arg(short, long)]
     pub path: Option<String>,
 
     /// Instead of executing a snippet, prints it to stdout
-    #[clap(long)]
+    #[arg(long)]
     #[cfg(not(feature = "disable-command-execution"))]
     pub print: bool,
 
     /// Returns the best match
-    #[clap(long)]
+    #[arg(long)]
     pub best_match: bool,
 
+    /// Prevents variable interpolation
+    #[arg(long)]
+    pub prevent_interpolation: bool,
+
     /// Searches for cheatsheets using the tldr-pages repository
-    #[clap(long)]
+    #[arg(long)]
     pub tldr: Option<String>,
 
     /// [Experimental] Comma-separated list that acts as filter for tags. Parts starting with ! represent negation
-    #[clap(long)]
+    #[arg(long)]
     pub tag_rules: Option<String>,
 
     /// Searches for cheatsheets using the cheat.sh repository
-    #[clap(long)]
+    #[arg(long)]
     pub cheatsh: Option<String>,
 
     /// Prepopulates the search field
-    #[clap(short, long)]
+    #[arg(short, long, allow_hyphen_values = true)]
     pub query: Option<String>,
 
     /// Finder overrides for snippet selection
-    #[clap(long)]
+    #[arg(long, allow_hyphen_values = true)]
     pub fzf_overrides: Option<String>,
 
     /// Finder overrides for variable selection
-    #[clap(long)]
+    #[arg(long, allow_hyphen_values = true)]
     pub fzf_overrides_var: Option<String>,
 
     /// Finder application to use
-    #[clap(long, possible_values = FINDER_POSSIBLE_VALUES, ignore_case = true)]
+    #[arg(long, ignore_case = true)]
     pub finder: Option<FinderChoice>,
 
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub cmd: Option<Command>,
 }
 
@@ -142,104 +94,38 @@ impl ClapConfig {
     }
 }
 
-#[derive(Debug, Parser)]
+// #[derive(Subcommand, Debug, Clone, Runnable, HasDeps)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum Command {
     /// [Experimental] Calls internal functions
-    Fn {
-        /// Function name (example: "url::open")
-        #[clap(possible_values = FUNC_POSSIBLE_VALUES, ignore_case = true)]
-        func: Func,
-        /// List of arguments (example: "https://google.com")
-        args: Vec<String>,
-    },
+    Fn(commands::func::Input),
     /// Manages cheatsheet repositories
     #[cfg(not(feature = "disable-repo-management"))]
-    Repo {
-        #[clap(subcommand)]
-        cmd: RepoCommand,
-    },
+    Repo(commands::repo::Input),
     /// Used for fzf's preview window when selecting snippets
-    #[clap(setting = AppSettings::Hidden)]
-    Preview {
-        /// Selection line
-        line: String,
-    },
+    #[command(hide = true)]
+    Preview(commands::preview::Input),
     /// Used for fzf's preview window when selecting variable suggestions
-    #[clap(setting = AppSettings::Hidden)]
-    PreviewVar {
-        /// Selection line
-        selection: String,
-        /// Query match
-        query: String,
-        /// Typed text
-        variable: String,
-    },
+    #[command(hide = true)]
+    PreviewVar(commands::preview::var::Input),
     /// Used for fzf's preview window when selecting variable suggestions
-    #[clap(setting = AppSettings::Hidden)]
-    PreviewVarStdin,
+    #[command(hide = true)]
+    PreviewVarStdin(commands::preview::var_stdin::Input),
     /// Outputs shell widget source code
-    Widget {
-        #[clap(possible_values = WIDGET_POSSIBLE_VALUES, ignore_case = true, default_value = "bash")]
-        shell: Shell,
-    },
+    Widget(commands::shell::Input),
     /// Shows info
-    Info {
-        #[clap(possible_values = INFO_POSSIBLE_VALUES, ignore_case = true)]
-        info: Info,
-    },
+    Info(commands::info::Input),
 }
 
-#[derive(Debug, Subcommand)]
-pub enum RepoCommand {
-    /// Imports cheatsheets from a repo
-    Add {
-        /// A URI to a git repository containing .cheat files ("user/repo" will download cheats from github.com/user/repo)
-        uri: String,
-    },
-    /// Browses for featured cheatsheet repos
-    Browse,
-}
-
+#[derive(Debug)]
 pub enum Source {
-    Filesystem(Option<String>, Option<String>),
+    Filesystem(Option<String>),
     Tldr(String),
     Cheats(String),
+    Welcome,
 }
 
 pub enum Action {
     Print,
     Execute,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_widget_possible_values() {
-        for v in WIDGET_POSSIBLE_VALUES {
-            assert!(Shell::from_str(v).is_ok())
-        }
-    }
-
-    #[test]
-    fn test_info_possible_values() {
-        for v in INFO_POSSIBLE_VALUES {
-            assert!(Info::from_str(v).is_ok())
-        }
-    }
-
-    #[test]
-    fn test_func_possible_values() {
-        for v in FUNC_POSSIBLE_VALUES {
-            assert!(Func::from_str(v).is_ok())
-        }
-    }
-
-    #[test]
-    fn test_finder_possible_values() {
-        for v in FINDER_POSSIBLE_VALUES {
-            assert!(FinderChoice::from_str(v).is_ok())
-        }
-    }
 }

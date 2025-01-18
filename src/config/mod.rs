@@ -2,17 +2,17 @@ mod cli;
 mod env;
 mod yaml;
 
+use crate::commands::func::Func;
 use crate::finder::FinderChoice;
-
-use crate::terminal::style::Color;
 pub use cli::*;
-
+use crossterm::style::Color;
 use env::EnvConfig;
 use yaml::YamlConfig;
 
 lazy_static! {
     pub static ref CONFIG: Config = Config::new();
 }
+#[derive(Debug)]
 pub struct Config {
     yaml: YamlConfig,
     clap: ClapConfig,
@@ -23,7 +23,7 @@ impl Config {
     pub fn new() -> Self {
         let env = EnvConfig::new();
         let yaml = YamlConfig::get(&env).unwrap_or_else(|e| {
-            eprintln!("Error parsing config file: {}", e);
+            eprintln!("Error parsing config file: {e}");
             eprintln!("Fallbacking to default one...");
             eprintln!();
             YamlConfig::default()
@@ -36,6 +36,10 @@ impl Config {
         self.clap.best_match
     }
 
+    pub fn prevent_interpolation(&self) -> bool {
+        self.clap.prevent_interpolation
+    }
+
     pub fn cmd(&self) -> Option<&Command> {
         self.clap.cmd.as_ref()
     }
@@ -45,8 +49,14 @@ impl Config {
             Source::Tldr(query)
         } else if let Some(query) = self.clap.cheatsh.clone() {
             Source::Cheats(query)
+        } else if let Some(Command::Fn(input)) = self.cmd() {
+            if let Func::Welcome = input.func {
+                Source::Welcome
+            } else {
+                Source::Filesystem(self.path())
+            }
         } else {
-            Source::Filesystem(self.path(), self.tag_rules())
+            Source::Filesystem(self.path())
         }
     }
 
@@ -60,7 +70,7 @@ impl Config {
                 if p.is_empty() {
                     None
                 } else {
-                    Some(p.join(":"))
+                    Some(p.join(crate::filesystem::JOIN_SEPARATOR))
                 }
             })
             .or_else(|| self.yaml.cheats.path.clone())
@@ -87,6 +97,10 @@ impl Config {
             .clone()
             .or_else(|| self.env.fzf_overrides_var.clone())
             .or_else(|| self.yaml.finder.overrides_var.clone())
+    }
+
+    pub fn tealdeer(&self) -> bool {
+        self.yaml.client.tealdeer
     }
 
     pub fn shell(&self) -> String {
@@ -128,12 +142,20 @@ impl Config {
         self.yaml.style.comment.width_percentage
     }
 
+    pub fn snippet_width_percentage(&self) -> u16 {
+        self.yaml.style.snippet.width_percentage
+    }
+
     pub fn tag_min_width(&self) -> u16 {
         self.yaml.style.tag.min_width
     }
 
     pub fn comment_min_width(&self) -> u16 {
         self.yaml.style.comment.min_width
+    }
+
+    pub fn snippet_min_width(&self) -> u16 {
+        self.yaml.style.snippet.min_width
     }
 
     #[cfg(feature = "disable-command-execution")]
